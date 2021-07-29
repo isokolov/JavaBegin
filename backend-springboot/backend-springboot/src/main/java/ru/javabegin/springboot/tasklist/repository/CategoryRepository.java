@@ -12,6 +12,7 @@ import java.util.List;
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Long> {
 
+    // JPQL (Java persistence query language),
     // поиск значений по названию для конкретного пользователя
     @Query("SELECT c FROM Category c where " +
             "(:title is null or :title='' " + // если передадим параметр title пустым, то выберутся все записи (сработает именно это условие)
