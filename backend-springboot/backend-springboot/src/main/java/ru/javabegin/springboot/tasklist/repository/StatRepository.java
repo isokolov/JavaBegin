@@ -8,5 +8,5 @@ import ru.javabegin.springboot.tasklist.entity.Stat;
 @Repository
 public interface StatRepository extends CrudRepository<Stat, Long> {
 
-    Stat findByUserEmail(String email);
+    Stat findByUserEmail(String email); // возвращается только 1 запись (каждый пользователь содержит только 1 запись в таблице Stat)
 }
