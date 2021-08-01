@@ -27,6 +27,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Query("UPDATE User u SET u.password = :password WHERE u.username=:username") // обновление записи с нужным UUID
 	int updatePassword(@Param("password") String password, @Param("username") String username); // возвращает int (сколько записей обновил) - в данном случае всегда должен возвращать 1
 
+	// для проверки существования email или username возвращаем только true или false (не возвращаем весь объект User, нет смысла)
+	@Query("select case when count(u)> 0 then true else false end from User u where lower(u.email) = lower(:email)")
+	boolean existsByEmail(@Param("email") String email);
+
+	@Query("select case when count(u)> 0 then true else false end from User u where lower(u.username) = lower(:username)")
+	boolean existsByUsername(@Param("username") String username);
+
 
 
 
