@@ -4,6 +4,11 @@ import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -14,7 +19,9 @@ import ru.javabegin.springboot.jwt.exception.RoleNotFoundException;
 import ru.javabegin.springboot.jwt.exception.UserAlreadyActivatedException;
 import ru.javabegin.springboot.jwt.exception.UserOrEmailExistsException;
 import ru.javabegin.springboot.jwt.objects.JsonException;
+import ru.javabegin.springboot.jwt.service.UserDetailsImpl;
 import ru.javabegin.springboot.jwt.service.UserService;
+import ru.javabegin.springboot.jwt.utils.JwtUtils;
 
 import javax.validation.Valid;
 import java.util.UUID;
@@ -28,11 +35,16 @@ public class AuthController {
 
     private UserService userService; // сервис для работы с пользователями
     private PasswordEncoder encoder; // кодировщик паролей (или любых данных), создает односторонний хеш
+    private AuthenticationManager authenticationManager; // стандартный встроенный менеджер Spring, проверяет логин-пароль
+    private JwtUtils jwtUtils; // класс-утилита для работы с jwt
 
     @Autowired
-    public AuthController(UserService userService, PasswordEncoder encoder) {
+    public AuthController(UserService userService, PasswordEncoder encoder,
+                AuthenticationManager authenticationManager, JwtUtils jwtUtils) {
         this.userService = userService;
         this.encoder = encoder;
+        this.authenticationManager = authenticationManager;
+        this.jwtUtils = jwtUtils;
     }
 
     // регистрация нового пользователя
@@ -95,6 +107,34 @@ public class AuthController {
         int updatedCount = userService.activate(uuid); // активируем пользователя
 
         return ResponseEntity.ok(updatedCount == 1); // 1 - значит запись обновилась успешно, 0 - что-то пошло не так
+    }
+
+    // залогиниться по паролю-пользователю
+    // этот метод всем будет доступен для вызова (не будем его "защищать" с помощью токенов, т.к. это не требуется по задаче)
+    @PostMapping("/login")
+    public ResponseEntity<User> login(@Valid @RequestBody User user) { // здесь параметр user используется как контейнер, чтобы передать логин-пароль
+
+        // проверяем логин-пароль
+        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(user.getUsername(), user.getPassword()));
+
+        // добавляем в Spring-контейнер информацию об авторизации (чтобы Spring понимал, что пользователь успешно вошел и мог использовать его роли и другие параметры)
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        // UserDetailsImpl - спец. объект, который хранится в Spring контейнере и содержит данные пользователя
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+
+        // активирован пользователь или нет (проверяем только после того, как пользователь успешно залогинился)
+        if (!userDetails.isActivated()) {
+            throw new DisabledException("User disabled"); // клиенту отправится ошибка о том, что пользователь не активирован
+        }
+
+        // после каждого успешного входа генерируется новый jwt, чтобы следующие запросы на backend авторизовывать автоматически
+        String jwt = jwtUtils.createAccessToken(userDetails.getUser());
+
+        // еслимы дошло до этой строки, значит пользователь успешно залогинился
+
+        return ResponseEntity.ok().body(userDetails.getUser());
+
     }
 
     @ExceptionHandler(Exception.class)
