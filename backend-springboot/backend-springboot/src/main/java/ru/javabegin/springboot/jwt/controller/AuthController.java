@@ -2,6 +2,8 @@ package ru.javabegin.springboot.jwt.controller;
 
 import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpCookie;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,6 +23,7 @@ import ru.javabegin.springboot.jwt.exception.UserOrEmailExistsException;
 import ru.javabegin.springboot.jwt.objects.JsonException;
 import ru.javabegin.springboot.jwt.service.UserDetailsImpl;
 import ru.javabegin.springboot.jwt.service.UserService;
+import ru.javabegin.springboot.jwt.utils.CookieUtils;
 import ru.javabegin.springboot.jwt.utils.JwtUtils;
 
 import javax.validation.Valid;
@@ -37,24 +40,43 @@ public class AuthController {
     private PasswordEncoder encoder; // кодировщик паролей (или любых данных), создает односторонний хеш
     private AuthenticationManager authenticationManager; // стандартный встроенный менеджер Spring, проверяет логин-пароль
     private JwtUtils jwtUtils; // класс-утилита для работы с jwt
+    private CookieUtils cookieUtils; // класс-утилита для работы с куками
+
+
+
 
     @Autowired
-    public AuthController(UserService userService, PasswordEncoder encoder,
-                AuthenticationManager authenticationManager, JwtUtils jwtUtils) {
+    public AuthController(UserService userService, PasswordEncoder encoder, AuthenticationManager authenticationManager, JwtUtils jwtUtils, CookieUtils cookieUtils) {
         this.userService = userService;
         this.encoder = encoder;
         this.authenticationManager = authenticationManager;
         this.jwtUtils = jwtUtils;
+        this.cookieUtils = cookieUtils;
+
+    }
+
+
+
+    @PostMapping("/test-no-auth")
+    public String testNoAuth() {
+        return "OK-no-auth";
+    }
+
+    @PostMapping("/test-with-auth")
+    public String testWithAuth() {
+        return "OK-with-auth";
     }
 
     // регистрация нового пользователя
+    // этот метод всем будет доступен для вызова (не будем его "защищать" с помощью токенов, т.к. это не требуется по задаче)
     @PutMapping("/register")
-    public ResponseEntity register(@Valid @RequestBody User user) throws RoleNotFoundException { // здесь параметр user используется, чтобы передать все данные пользователя для регистрации
+    public ResponseEntity register(@Valid @RequestBody User user) { // здесь параметр user используется, чтобы передать все данные пользователя для регистрации
 
         // если имя или email уже существуют в БД - не даем создать пользователя
         if (userService.userExists(user.getUsername(), user.getEmail())) {
             throw new UserOrEmailExistsException("User or email already exists"); // возвращаем клиенту ошибку
         }
+
 
         // присваиваем дефолтную роль новому пользователю
 
@@ -66,9 +88,12 @@ public class AuthController {
            Объект роли нужно всегда получать из БД перед регистрацией пользователя, т.к. все должно работать динамически (если роли изменили в БД, мы считаем обновленные данные)
           Т.е. вариант загрузки всех ролей в начале работы приложения - не подойдет, т.к. данные в БД могут измениться, а нас останется неактуальные роли
         */
-        
+
+
+
         // зашифровать пароль (алгоритм BCrypt)
         user.setPassword(encoder.encode(user.getPassword())); // генерим хеш пароля на основе переданного текста
+
 
         // сохранить в БД активность пользователя
         Activity activity = new Activity();
@@ -80,15 +105,6 @@ public class AuthController {
         return ResponseEntity.ok().build(); // просто отправляем статус 200-ОК (без каких-либо данных) - значит регистрация выполнилась успешно
     }
 
-    /*
-
-    Метод перехватывает все ошибки в контроллере (неверный логин-пароль и пр.)
-
-    Даже без этого метода все ошибки будут отправляться клиенту, просто здесь это можно кастомизировать, например отправить JSON в нужном формате
-
-    Можно настроить, какие типа ошибок отправлять в явном виде, а какие нет (чтобы не давать лишнюю информацию злоумышленникам)
-
-    */
 
     // активация пользователя (чтобы мог авторизоваться и работать дальше с приложением)
     // этот метод всем будет доступен для вызова (не будем его "защищать" с помощью токенов, т.к. это не требуется по задаче)
@@ -128,14 +144,38 @@ public class AuthController {
             throw new DisabledException("User disabled"); // клиенту отправится ошибка о том, что пользователь не активирован
         }
 
+
+        // если мы дошло до этой строки, значит пользователь успешно залогинился
+
         // после каждого успешного входа генерируется новый jwt, чтобы следующие запросы на backend авторизовывать автоматически
         String jwt = jwtUtils.createAccessToken(userDetails.getUser());
 
-        // еслимы дошло до этой строки, значит пользователь успешно залогинился
 
-        return ResponseEntity.ok().body(userDetails.getUser());
+        userDetails.getUser().setPassword(null); // пароль нужен только один раз для аутентификации - поэтому можем его занулить, чтобы больше нигде не "засветился"
+
+        // создаем кук со значением jwt (браузер будет отправлять его автоматически на backend при каждом запросе)
+        // обратите внимание на флаги безопасности в методе создания кука
+        HttpCookie cookie = cookieUtils.createJwtCookie(jwt); // server-side cookie
+
+        HttpHeaders responseHeaders = new HttpHeaders(); // объект для добавления заголовков в response
+        responseHeaders.add(HttpHeaders.SET_COOKIE, cookie.toString()); // добавляем server-side cookie в заголовок (header)
+
+
+        // отправляем клиенту данные пользователя (и jwt-кук в заголовке Set-Cookie)
+        return ResponseEntity.ok().headers(responseHeaders).body(userDetails.getUser());
+
 
     }
+
+    /*
+
+    Метод перехватывает все ошибки в контроллере (неверный логин-пароль и пр.)
+
+    Даже без этого метода все ошибки будут отправляться клиенту, просто здесь это можно кастомизировать, например отправить JSON в нужном формате
+
+    Можно настроить, какие типа ошибок отправлять в явном виде, а какие нет (чтобы не давать лишнюю информацию злоумышленникам)
+
+    */
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<JsonException> handleExceptions(Exception ex) {
@@ -146,7 +186,7 @@ public class AuthController {
         UserAlreadyActivatedException - пользователь уже активирован (пытается неск. раз активировать)
         UsernameNotFoundException - username или email не найден в базе
 
-        BadCredentialsException - неверный логин-пароль
+        BadCredentialsException - неверный логин-пароль (или любые другие данные пользователя, которые он использовал для аутентификации)
         UserOrEmailExistsException - пользователь или email уже существуют
         DataIntegrityViolationException - ошибка уникальности в БД
 
@@ -158,6 +198,5 @@ public class AuthController {
         return new ResponseEntity(new JsonException(ex.getClass().getSimpleName()), HttpStatus.BAD_REQUEST); // Spring автоматически конвертирует объект JsonException в JSON
 
     }
-
 
 }
