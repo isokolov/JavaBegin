@@ -1,5 +1,6 @@
 package ru.javabegin.springboot.jwt.utils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.*;
 import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Value;
@@ -7,6 +8,8 @@ import org.springframework.stereotype.Component;
 import ru.javabegin.springboot.jwt.entity.User;
 
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Level;
 
 /*
@@ -15,12 +18,15 @@ import java.util.logging.Level;
 
 Сам jwt не шифруем (encrypt), т.к. он будет передаваться по HTTPS и автоматически будет шифроваться (нет смысла 2 раза шифровать)
 
+
 */
+
 
 @Component // добавится в Spring контейнер и будет доступен для любого Spring компонента (контроллеры, сервисы и пр.)
 @Log
 public class JwtUtils {
 
+    public static final String CLAIM_USER_KEY = "user";
     @Value("${jwt.secret}")
     private String jwtSecret; // секретный ключ для создания jwt (хранится только на сервере, нельзя никуда передавать)
 
@@ -29,22 +35,30 @@ public class JwtUtils {
     private int accessTokenExpiration; // длительность токена для автоматического логина (все запросы будут автоматически проходить аутентификацию, если в них присутствует JWT)
     // название взяли по аналогии с протоколом OAuth2, но не путайте - это просто название нашего JWT, здесь мы не применяем OAuth2
 
+
     // генерация JWT по данным пользователя
     public String createAccessToken(User user) {
 
         Date currentDate = new Date(); // для отсчета времени от текущего момента - для задания expiration
 
+        Map claims = new HashMap<String, Object>();
+        claims.put(CLAIM_USER_KEY, user);
+        claims.put(Claims.SUBJECT, user.getId()); // системные поля типа sub также можно добавлять
+
+
         return Jwts.builder()
 
                 // задаем claims
                 // Какие именно данные (claims) добавлять в JWT (решаете сами)
-                .setSubject((user.getId().toString())) // subject - это одно из стандартных полей jwt (сохраняем неизменяемое id пользователя)
+//                .setSubject((user.getId().toString())) // sub - это одно из стандартных полей jwt (можно сохранять id пользователя)
+                .setClaims(claims) // добавляем все claims
                 .setIssuedAt(currentDate) // время отсчета - текущий момент
                 .setExpiration(new Date(currentDate.getTime() + accessTokenExpiration)) // срок действия access_token
 
                 .signWith(SignatureAlgorithm.HS512, jwtSecret) // используем алгоритм кодирования HS512 (часто используемый в соотношении скорость-качество) - хешируем все данные секретным ключом-строкой
                 .compact(); // кодируем в формат Base64 (это не шифрование, а просто представление данных в виде удобной строки)
     }
+
 
     // проверить целостность данных (не истек ли срок jwt и пр.)
     public boolean validate(String jwt) {
@@ -73,4 +87,15 @@ public class JwtUtils {
         */
     }
 
+
+    // получение поля subject из JWT
+    public User getUser(String jwt) {
+
+        Map map = (Map)Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(jwt).getBody().get(CLAIM_USER_KEY); // CLAIM_USER_KEY здесь - это поле из токена
+
+        ObjectMapper mapper = new ObjectMapper();
+        User user = mapper.convertValue(map, User.class);
+
+        return user;
+    }
 }

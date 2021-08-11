@@ -6,6 +6,7 @@ import org.springframework.http.HttpCookie;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -63,9 +64,12 @@ public class AuthController {
     }
 
     @PostMapping("/test-with-auth")
+    @PreAuthorize("USER")
     public String testWithAuth() {
         return "OK-with-auth";
     }
+
+
 
     // регистрация нового пользователя
     // этот метод всем будет доступен для вызова (не будем его "защищать" с помощью токенов, т.к. это не требуется по задаче)
@@ -125,6 +129,8 @@ public class AuthController {
         return ResponseEntity.ok(updatedCount == 1); // 1 - значит запись обновилась успешно, 0 - что-то пошло не так
     }
 
+
+
     // залогиниться по паролю-пользователю
     // этот метод всем будет доступен для вызова (не будем его "защищать" с помощью токенов, т.к. это не требуется по задаче)
     @PostMapping("/login")
@@ -147,11 +153,13 @@ public class AuthController {
 
         // если мы дошло до этой строки, значит пользователь успешно залогинился
 
+        // пароль зануляем до формирования jwt
+        userDetails.getUser().setPassword(null); // пароль нужен только один раз для аутентификации - поэтому можем его занулить, чтобы больше нигде не "засветился"
+
+
         // после каждого успешного входа генерируется новый jwt, чтобы следующие запросы на backend авторизовывать автоматически
         String jwt = jwtUtils.createAccessToken(userDetails.getUser());
 
-
-        userDetails.getUser().setPassword(null); // пароль нужен только один раз для аутентификации - поэтому можем его занулить, чтобы больше нигде не "засветился"
 
         // создаем кук со значением jwt (браузер будет отправлять его автоматически на backend при каждом запросе)
         // обратите внимание на флаги безопасности в методе создания кука
@@ -166,6 +174,9 @@ public class AuthController {
 
 
     }
+
+
+
 
     /*
 

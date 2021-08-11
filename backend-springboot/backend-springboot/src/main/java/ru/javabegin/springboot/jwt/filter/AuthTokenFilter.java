@@ -2,10 +2,14 @@ package ru.javabegin.springboot.jwt.filter;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import ru.javabegin.springboot.jwt.entity.User;
 import ru.javabegin.springboot.jwt.exception.JwtCommonException;
+import ru.javabegin.springboot.jwt.service.UserDetailsImpl;
 import ru.javabegin.springboot.jwt.utils.CookieUtils;
 import ru.javabegin.springboot.jwt.utils.JwtUtils;
 
@@ -83,8 +87,9 @@ public class AuthTokenFilter extends OncePerRequestFilter {
 
 
         if (
-                !isRequestToPublicAPI && // если пользователь (с помощью браузера!) обратился к защищенному URI, для которого нужна аутентификация
-                        SecurityContextHolder.getContext().getAuthentication() == null  // если пользователь еще не прошел аутентификацию (а значит объект Authentication == null в контейнере Spring, вдруг ранее еще где-то уже произвели аутентификацию)
+                !isRequestToPublicAPI // если пользователь (с помощью браузера!) обратился к защищенному URI, для которого нужна аутентификация
+            // &&
+            //  SecurityContextHolder.getContext().getAuthentication() == null  // если пользователь еще не прошел аутентификацию (а значит объект Authentication == null в контейнере Spring, вдруг ранее еще где-то уже произвели аутентификацию)
         ) {
 
 
@@ -101,16 +106,37 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                     Теперь нужно считать все данные пользователя из JWT, чтобы получить userDetails, добавить его в Spring контейнер (авторизовать) и не делать ни одного запроса в БД
                     Запрос в БД выполняем только 1 раз, когда пользователь залогинился. После этого аутентификация/авторизация проходит автоматически с помощью JWT
                     Мы должны создать объект userDetails на основе данных JWT (все поля, кроме пароля)
+                    Здесь не используем объект UserDetailsService, т.к. не нужно выполнять запросы в БД
+                    Используем только UserDetails, чтобы добавить его в Spring контейнер
                      */
 
-                    System.out.println("jwt = " + jwt);
+
+                    User user = jwtUtils.getUser(jwt); // получаем user из JWT
+
+                    UserDetailsImpl userDetails = new UserDetailsImpl(user); // создаем userDetails вручную, потому что нам неоткуда его взять
+
+                    // Вручную создаем объект UsernamePasswordAuthenticationToken (т.е. не используем пароль и не вызываем метод authenticate, как в методе login - это уже сделано ранее и был создан jwt)
+                    // Привязываем UsernamePasswordAuthenticationToken к пользователю
+                    // Добавляем объект UsernamePasswordAuthenticationToken в Spring контейнер - тем самым Spring будет видеть, что к пользователю привязан объект authentication - соответственно он успешно залогинен
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities()); // пароль не нужен
+
+                    // 1) добавляем входящий запрос в контейнер, чтобы дальше уже Spring обрабатывал запрос с учетом данных авторизации
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    // 2) добавляем объект authentication в spring контейнер - тем самым Spring поймет, что пользователь успешно залогинен
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+
 
 
                 } else { // не смогли обработать токен (возможно вышел срок действия или любая другая ошибка)
+
                     throw new JwtCommonException("jwt validate exception"); // пользователь не будет авторизован (т.к. jwt некорректный) и клиенту отправится ошибка
                 }
 
             } else {
+
+                // до контроллера запрос еще не дошел, поэтому здесь не будет вызываться @ExceptionHandler (перехват всех ошибок в контроллере)
                 throw new AuthenticationCredentialsNotFoundException("token not found"); // если запрос пришел не на публичную страницу и если не найден jwt
             }
 
@@ -124,6 +150,5 @@ public class AuthTokenFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response); // продолжить выполнение запроса (запрос отправится дальше в контроллер)
     }
-
 
 }
