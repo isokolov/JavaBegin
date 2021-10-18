@@ -1,5 +1,16 @@
 package ru.javabegin.springboot.jwt.utils;
 
+import org.apache.tomcat.util.http.SameSiteCookies;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpCookie;
+import org.springframework.http.ResponseCookie;
+import org.springframework.stereotype.Component;
+
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+
+
+
 /*
 
 Утилита для работы с куками
@@ -16,19 +27,12 @@ package ru.javabegin.springboot.jwt.utils;
  */
 
 
-import org.apache.tomcat.util.http.SameSiteCookies;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpCookie;
-import org.springframework.http.ResponseCookie;
-import org.springframework.stereotype.Component;
-
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-
 @Component // добавится в Spring контейнер и будет доступен для любого Spring компонента (контроллеры, сервисы и пр.)
 public class CookieUtils {
 
-    private final String  ACCESS_TOKEN = "access_token"; // имя кука, который будет хранить jwt (возьмем стандартное имя)
+
+    @Value("${cookie.jwt.name}")
+    private String cookieJwtName; // имя кука, который будет хранить jwt (возьмем стандартное имя)
 
     @Value("${cookie.jwt.max-age}")
     private int cookieAccessTokenDuration;
@@ -43,7 +47,7 @@ public class CookieUtils {
         return ResponseCookie
 
                 // настройки кука
-                .from(ACCESS_TOKEN, jwt) // название и значение кука
+                .from(cookieJwtName, jwt) // название и значение кука
                 .maxAge(cookieAccessTokenDuration) // 86400 сек = 1 сутки
                 .sameSite(SameSiteCookies.STRICT.getValue()) // запрет на отправку кука, если запрос пришел со стороннего сайта (доп. защита от CSRF атак) - кук будет отправляться только если пользователь набрал URL в адресной строке
                 .httpOnly(true) // кук будет доступен для считывания только на сервере (на клиенте НЕ будет доступен с помощью JavaScript - тем самым защищаемся от XSS атак)
@@ -71,12 +75,27 @@ public class CookieUtils {
         if (cookies != null) { // если в запросе были переданы какие-либо куки
 
             for (Cookie cookie : cookies) { // перебор всех куков
-                if (ACCESS_TOKEN.equals(cookie.getName())) { // если есть наш кук (по названию) - то берем его
+                if (cookieJwtName.equals(cookie.getName())) { // если есть наш кук (по названию) - то берем его
                     return cookie.getValue(); // получаем значение кука (JWT)
                 }
             }
         }
         return null; // значит кук не нашли - возвращаем null
+    }
+
+
+    // зануляет (удаляет) кук
+    public HttpCookie deleteJwtCookie() {
+        return ResponseCookie.
+                from(cookieJwtName, null) // пустое значение
+                .maxAge(0) // кук с нулевым сроком действия браузер удалит автоматически
+                .sameSite(SameSiteCookies.STRICT.getValue()) // запрет на отправку кука, если запрос пришел со стороннего сайта (доп. защита от CSRF атак) - кук будет отправляться только если пользователь набрал URL в адресной строке
+                .httpOnly(true) // кук будет доступен для считывания только на сервере (на клиенте НЕ будет доступен с помощью JavaScript - тем самым защищаемся от XSS атак)
+                .secure(true) // кук будет передаваться браузером на backend только если канал будет защищен (https)
+                .domain(cookieAccessTokenDomain)
+                .path("/") // кук будет доступен на любой странице
+                .build();
+
     }
 
 }

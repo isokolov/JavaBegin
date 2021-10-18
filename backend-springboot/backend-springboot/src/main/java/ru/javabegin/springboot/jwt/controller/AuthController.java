@@ -71,6 +71,27 @@ public class AuthController {
 
 
 
+    // выход из системы - мы должны занулить (удалить) кук с jwt (пользователю придется заново логиниться при след. входе)
+    @PostMapping("/logout")
+    @PreAuthorize("USER")
+    public ResponseEntity logout() { // body отсутствует (ничего не передаем от клиента) - все данные пользователя передаются с куком
+
+
+        // главная задача при logout - это удалить кук
+
+        // создаем кук с истекшим сроком действия, тем самым браузер удалит такой кук автоматически
+        HttpCookie cookie = cookieUtils.deleteJwtCookie();
+
+        HttpHeaders responseHeaders = new HttpHeaders(); // объект для добавления заголовков в response
+        responseHeaders.add(HttpHeaders.SET_COOKIE, cookie.toString()); // добавляем кук в заголовок (header)
+
+        // в теле запроса ничего не отправляем, отправляем только кук обратно клиенту (браузер автоматически удалит его)
+        return ResponseEntity.ok().headers(responseHeaders).build();
+
+    }
+
+
+
     // регистрация нового пользователя
     // этот метод всем будет доступен для вызова (не будем его "защищать" с помощью токенов, т.к. это не требуется по задаче)
     @PutMapping("/register")
@@ -175,6 +196,24 @@ public class AuthController {
 
     }
 
+
+    // обновление пароля (когда клиент ввел новый пароль и отправил его на backend)
+    @PostMapping("/update-password")
+    @PreAuthorize("USER")
+    public ResponseEntity<Boolean> updatePassword(@RequestBody String password) { // password - новый пароль
+
+         /*
+            До этого шага должна была произойти автоматическая авторизация пользователя в AuthTokenFilter на основе кука jwt.
+            Без этой информации метод не выполнится, т.к. не сможем получить пользователя, для которого хотим выполнить операцию
+         */
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication(); // пытаемся получить объект аутентификации
+        UserDetailsImpl user = (UserDetailsImpl) authentication.getPrincipal(); // получаем пользователя из Spring контейнера
+
+        // кол-во обновленных записей (в нашем случае должно быть 1, т.к. обновляем пароль одного пользователя)
+        int updatedCount = userService.updatePassword(encoder.encode(password), user.getUsername());
+
+        return ResponseEntity.ok(updatedCount == 1); // 1 - значит запись обновилась успешно, 0 - что-то пошло не так
+    }
 
 
 
