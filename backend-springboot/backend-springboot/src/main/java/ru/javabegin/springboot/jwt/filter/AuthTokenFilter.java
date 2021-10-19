@@ -6,6 +6,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import ru.javabegin.springboot.jwt.entity.User;
 import ru.javabegin.springboot.jwt.exception.JwtCommonException;
@@ -38,6 +39,9 @@ import java.util.List;
 
 @Component
 public class AuthTokenFilter extends OncePerRequestFilter {
+
+    // стандартный префикс, который принято добавлять перед значением JWT в заголовке Authorization
+    public static final String BEARER_PREFIX = "Bearer ";
 
     private JwtUtils jwtUtils; // утилита для работы с jwt
     private CookieUtils cookieUtils; // класс-утилита для работы с куками
@@ -95,7 +99,13 @@ public class AuthTokenFilter extends OncePerRequestFilter {
 
             // сюда попадем, если запрос хочет получить данные, которые требуют аутентификации, ролей и пр.
 
-            String jwt = cookieUtils.getCookieAccessToken(request); // для всех остальных запросов - получаем jwt из кука
+            String jwt = null;
+
+            if (request.getRequestURI().contains("update-password")) { // если это запрос на обновление пароля
+                jwt = getJwtFromHeader(request);// получаем токен из заголовка Authorization
+            } else { // для всех остальных запросов
+                jwt = cookieUtils.getCookieAccessToken(request); // получаем jwt из кука access_token
+            }
 
 
             if (jwt != null) { // если токен найден
@@ -111,7 +121,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                      */
 
 
-                    User user = jwtUtils.getUser(jwt); // получаем user из JWT
+                    User user = jwtUtils.getUser(jwt); // получаем user из JWT - НЕ ДЕЛАЕМ ЗАПРОС В БД!
 
                     UserDetailsImpl userDetails = new UserDetailsImpl(user); // создаем userDetails вручную, потому что нам неоткуда его взять
 
@@ -126,7 +136,6 @@ public class AuthTokenFilter extends OncePerRequestFilter {
 
                     // 2) добавляем объект authentication в spring контейнер - тем самым Spring поймет, что пользователь успешно залогинен
                     SecurityContextHolder.getContext().setAuthentication(authentication);
-
 
 
                 } else { // не смогли обработать токен (возможно вышел срок действия или любая другая ошибка)
@@ -146,9 +155,38 @@ public class AuthTokenFilter extends OncePerRequestFilter {
       /* сюда дойдем только в 2х случаях:
          1) если запрос пришел на публичную ссылку (не требует авторизации)
          2) если запрос пришел на закрытую ссылку и jwt прошел валидацию (срок действия и пр.) - а значит пользователь уже авторизован в Spring контейнере
+
+         Во всех остальных случаях будет выбрасываться exception и сюда код не будет доходить
+
          */
 
         filterChain.doFilter(request, response); // продолжить выполнение запроса (запрос отправится дальше в контроллер)
     }
+
+
+    /*
+    Метод для получения jwt из заголовка Authorization (не из кука) - в нашем проекте такой способ передачи jwt используется только в 1 месте: при запросе на обновление пароля пользователем.
+
+    Чтобы обновить пароль - пользователь в письме переходит по URL, в конце которого указан jwt.
+    Этот jwt считывается на клиенте и добавляется в заголовок Authorization.
+
+    Не рекомендуется на клиенте создавать кук и добавлять туда jwt - это небезопасно, т.к. такой client-side-cookie может быть считан.
+
+    Поэтому jwt добавляется в заголовок запроса Authorization - 1 раз и для 1 запроса.
+
+    Во всех остальных случаях - jwt создается только сервером (флаг httpOnly) и не может быть считан с помощью JavaScript на клиенте (для безопасности)
+
+ */
+    private String getJwtFromHeader(HttpServletRequest request) {
+        String headerAuth = request.getHeader("Authorization");
+
+        if (StringUtils.hasText(headerAuth) && headerAuth.startsWith(BEARER_PREFIX)) {
+            return headerAuth.substring(7); // вырезаем префикс, чтобы получить чистое значение jwt
+        }
+
+        return null; // jwt не найден
+    }
+
+
 
 }

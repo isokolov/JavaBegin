@@ -26,7 +26,8 @@ import java.util.logging.Level;
 @Log
 public class JwtUtils {
 
-    public static final String CLAIM_USER_KEY = "user";
+    public static final String CLAIM_USER_KEY = "user"; // поле в JWT, в которое будет записан User
+
     @Value("${jwt.secret}")
     private String jwtSecret; // секретный ключ для создания jwt (хранится только на сервере, нельзя никуда передавать)
 
@@ -35,11 +36,28 @@ public class JwtUtils {
     private int accessTokenExpiration; // длительность токена для автоматического логина (все запросы будут автоматически проходить аутентификацию, если в них присутствует JWT)
     // название взяли по аналогии с протоколом OAuth2, но не путайте - это просто название нашего JWT, здесь мы не применяем OAuth2
 
+    @Value("${jwt.reset-pass-expiration}") // 300000 мс = 5 мин
+    private int resetPassTokenExpiration; // длительность токена для сброса пароля (чем короче, тем лучше)
 
-    // генерация JWT по данным пользователя
-    public String createAccessToken(User user) {
+    // генерация JWT для доступа к данным
+    public String createAccessToken(User user) { // в user будут заполнены те поля, которые нужны аутентификации пользователя и работы в системе
+        return createToken(user, accessTokenExpiration);
+    }
 
+
+    // генерация JWT для сброса пароля
+    public String createEmailResetToken(User user) { // в user будут заполнены только те поля, которые нужны для сброса пароля
+        return createToken(user, resetPassTokenExpiration);
+    }
+
+
+    // создает JWT с нужным сроком действия
+    private String createToken(User user, int duration){ // все, что будет передано в User - будет записано в JWT
         Date currentDate = new Date(); // для отсчета времени от текущего момента - для задания expiration
+
+        // пароль зануляем до формирования jwt
+        user.setPassword(null); // пароль нужен только один раз для аутентификации - поэтому можем его занулить, чтобы больше нигде не "засветился"
+
 
         Map claims = new HashMap<String, Object>();
         claims.put(CLAIM_USER_KEY, user);
@@ -53,7 +71,7 @@ public class JwtUtils {
 //                .setSubject((user.getId().toString())) // sub - это одно из стандартных полей jwt (можно сохранять id пользователя)
                 .setClaims(claims) // добавляем все claims
                 .setIssuedAt(currentDate) // время отсчета - текущий момент
-                .setExpiration(new Date(currentDate.getTime() + accessTokenExpiration)) // срок действия access_token
+                .setExpiration(new Date(currentDate.getTime() + duration)) // срок действия access_token
 
                 .signWith(SignatureAlgorithm.HS512, jwtSecret) // используем алгоритм кодирования HS512 (часто используемый в соотношении скорость-качество) - хешируем все данные секретным ключом-строкой
                 .compact(); // кодируем в формат Base64 (это не шифрование, а просто представление данных в виде удобной строки)
@@ -98,4 +116,5 @@ public class JwtUtils {
 
         return user;
     }
+
 }

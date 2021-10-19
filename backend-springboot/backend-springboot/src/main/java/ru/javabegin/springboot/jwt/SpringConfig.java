@@ -4,8 +4,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
@@ -14,10 +16,15 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.session.SessionManagementFilter;
 import ru.javabegin.springboot.jwt.filter.AuthTokenFilter;
+import ru.javabegin.springboot.jwt.filter.ExceptionHandlerFilter;
 import ru.javabegin.springboot.jwt.service.UserDetailsServiceImpl;
 
 @Configuration
 @EnableWebSecurity(debug = true) // указывает Spring контейнеру, чтобы находил файл конфигурации в классе. debug = true - для просмотра лога какие бины были созданы, в production нужно ставить false
+@EnableGlobalMethodSecurity(
+        prePostEnabled = true // true означает, что можно будет использовать аннотации pre/post в компонентах Spring (например, @PreAuthorize для доступа к методам или контроллеру только для нужных прав)
+)
+@EnableAsync
 public class SpringConfig extends WebSecurityConfigurerAdapter {
 
     // для получения пользователя из БД
@@ -25,6 +32,12 @@ public class SpringConfig extends WebSecurityConfigurerAdapter {
 
     // перехватывает все выходящие запросы (проверяет jwt если необходимо, автоматически логинит пользователя)
     private AuthTokenFilter authTokenFilter; // его нужно зарегистрировать в filterchain
+    private ExceptionHandlerFilter exceptionHandlerFilter; // самый верхний фильтр, который отлавливает ошибки во всех следующих фильтрах и отправляет клиенту в формате JSON
+
+    @Autowired
+    public void setExceptionHandlerFilter(ExceptionHandlerFilter exceptionHandlerFilter) {
+        this.exceptionHandlerFilter = exceptionHandlerFilter;
+    }
 
     @Autowired
     public void setUserDetailsService(UserDetailsServiceImpl userDetailsService) { // внедряем наш компонент Spring @Service
@@ -69,6 +82,9 @@ public class SpringConfig extends WebSecurityConfigurerAdapter {
         return registration;
     }
 
+    /*     С помощью WebMvcConfigurer можно задать глобальные правила CORS сразу для всех контроллеров/методов.
+       Если необходимо - в каждом контроллере можно задавать свои настройки
+*/
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         // порядок следования настроек внутри метода - неважен, можно в любой последовательности
@@ -86,6 +102,9 @@ public class SpringConfig extends WebSecurityConfigurerAdapter {
         http.requiresChannel().anyRequest().requiresSecure(); // обязательное исп. HTTPS для всех запросах
         // authTokenFilter - валидация JWT, до того, как запрос попадет в контроллер
         http.addFilterBefore(authTokenFilter, SessionManagementFilter.class); // добавляем наш фильтр в securityfilterchain
+
+//        // отлавливает ошибки последующих фильтром и отправляет их клиенту в формате JSON
+        //http.addFilterBefore(exceptionHandlerFilter, AuthTokenFilter.class); // этот фильтр должен обязательно находиться перед всеми нашими остальными фильтрами
 
     }
 }
