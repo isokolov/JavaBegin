@@ -1,4 +1,4 @@
 
 <p *ngIf="!cookieEnabled"> Cookies отключены. Включите в настройках браузера - после этого обновите страницу.</p>
 
-<p *ngIf="cookieEnabled">work!</p>
+<router-outlet *ngIf="cookieEnabled"></router-outlet>

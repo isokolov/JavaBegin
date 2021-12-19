@@ -1,1 +1,37 @@
-<p>login works!</p>
+<!--        форма для заполнения логин-пароль-->
+<form [formGroup]="form" (ngSubmit)="submitForm()">
+
+  <div class="row">
+    <div class="col-md-6 col-sm-12">
+      <label>Аккаунт или email</label>
+    </div>
+
+  </div>
+
+
+  <div class="row">
+    <div class="col-md-6 col-sm-12">
+      <input id="username" type="text" formControlName="username"/>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 col-sm-12">
+      <label>Пароль</label>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 col-sm-12">
+      <input id="password" type="password" formControlName="password"/>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 col-sm-12">
+      <button type="submit">Войти</button>
+    </div>
+  </div>
+
+</form>
+
