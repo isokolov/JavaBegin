@@ -6,6 +6,15 @@
       <label>Аккаунт или email</label>
     </div>
 
+    <div class="col-md-6 col-sm-12">
+      <!--              если хотя бы 1 раз нажали кнопку и появились ошибки валидации-->
+      <div *ngIf="firstSubmitted && usernameField.errors">
+        <p *ngIf="usernameField.errors.required" class="error">Обязательное поле</p>
+        <p *ngIf="usernameField.errors.minlength" class="error">Не меньше 6 символов</p>
+
+      </div>
+    </div>
+
   </div>
 
 
