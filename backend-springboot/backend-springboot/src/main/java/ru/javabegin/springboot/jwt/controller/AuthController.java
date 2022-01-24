@@ -37,6 +37,7 @@ import static ru.javabegin.springboot.jwt.service.UserService.DEFAULT_ROLE;
 @RestController
 @RequestMapping("/auth")
 @Log
+@CrossOrigin(origins = "http://localhost:4200")
 public class AuthController {
 
     private UserService userService; // сервис для работы с пользователями

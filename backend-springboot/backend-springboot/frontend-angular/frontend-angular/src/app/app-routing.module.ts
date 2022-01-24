@@ -2,6 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {RouterModule, Routes} from '@angular/router';
 import {LoginComponent} from './auth/login/login.component';
+import {RegisterComponent} from "./auth/register/register.component";
 
 
 /*
@@ -25,6 +26,9 @@ const routes: Routes = [
   {path: '', component: LoginComponent}, // главная
   {path: 'logout', redirectTo: '', pathMatch: 'full'}, // главная
   {path: 'index', redirectTo: '', pathMatch: 'full'}, // главная
+
+  {path: 'register', component: RegisterComponent, pathMatch: 'full'}, // регистрация
+
 
 ];
 

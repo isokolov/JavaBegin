@@ -1,5 +1,5 @@
 import {Injectable} from '@angular/core';
-import {HttpClient, HttpParams} from '@angular/common/http';
+import {HttpClient, HttpHeaders, HttpParams} from '@angular/common/http';
 import {BehaviorSubject, Observable} from 'rxjs';
 import {Router} from '@angular/router';
 import {environment} from '../../../environments/environment';
@@ -24,7 +24,12 @@ export class AuthService {
 
   // аутентификация
   public login(request: User): Observable<User> { // ajax запрос
-    return this.httpClient.post<User>(this.backendAuthURI + '/login', request); // request - это body запроса в формате JSON
+    return this.httpClient.post<User>(this.backendAuthURI + '/login', request,
+      {
+        headers: new HttpHeaders({
+          'Content-Type':  'application/json',
+        })
+      }); // request - это body запроса в формате JSON
   }
 
 }

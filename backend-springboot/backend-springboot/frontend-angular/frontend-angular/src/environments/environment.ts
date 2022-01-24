@@ -5,7 +5,7 @@
 export const environment = {
   production: false,
   backendURL: 'https://localhost:8080', // ссылка на корневой URL бэкенда
-  frontendURL: 'https://localhost:4200', // ссылка на корневой URL фронтэнда
+  frontendURL: 'http://localhost:4200', // ссылка на корневой URL фронтэнда
 };
 
 /*

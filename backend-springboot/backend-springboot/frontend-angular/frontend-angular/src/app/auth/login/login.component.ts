@@ -12,7 +12,10 @@ export class LoginComponent implements OnInit {
   form: FormGroup; // форма с введенными пользователем данными
   user: User; // данные пользователя после того, как успешно залогинится
   error: string; // текст ошибки (если есть) - возвращается от backend
-  firstSubmitted = false; // становится true при первом нажатии (чтобы сразу не показывать ошибки полей, а только после первой попытки войти)
+  firstSubmitted = false; // становится true при первом нажатии (чтобы сразу не показывать ошибки полей, а только после нажатия Войти)
+  isLoading = false; // идет ли загрузка в данный момент (для показа/скрытия индикатора загрузки)
+
+
 
   // внедрение всех нужных объектов
   constructor(
@@ -41,6 +44,7 @@ export class LoginComponent implements OnInit {
     return this.form.get('password');
   }
 
+
   // попытка отправки данных формы аутентификации
   public submitForm(): void {
 
@@ -49,19 +53,27 @@ export class LoginComponent implements OnInit {
     if (this.form.invalid) { // если есть хотя бы одна ошибка в введенных данных формы
       return; // не отправляем данные на сервер
     }
+
+    this.isLoading = true; // отображает индикатор загрузки
+
     // объект для отправки на сервер (добавляется в тело запроса)
     const tmpUser = new User();
     tmpUser.username = this.usernameField.value; // берем введенное значение пользователя
     tmpUser.password = this.passwordField.value;
 
+
     // отправка запроса на сервер
     this.authService.login(tmpUser).subscribe( // подписываемся на результат работы backend
       result => { // запрос успешно выполнился без ошибок (значит пользователь ввел верные логин-пароль)
+
+        this.isLoading = false; // скрывает индикатор загрузки
+
 
         /*
         Пароль передается только 1 раз при аутентификации и не сохраняется в jwt.
         При каждой успешной аутентификации - на бэкенде генерируется новый jwt
          */
+
 
         // примечание:
         // - данные пользователя находятся не внутри jwt (payload), а просто в составе JSON (не закодированное поле user)
@@ -69,10 +81,15 @@ export class LoginComponent implements OnInit {
 
         this.user = result; // получаем пользователя из JSON и сохраняем в память приложения (в переменную)
 
+
         console.log('user = ' + this.user);
+
 
       },
       err => { // запрос выполнился с ошибкой (можем использовать переменную err)
+
+        this.isLoading = false; // скрывает индикатор загрузки
+
 
         switch (err.error.exception) { // считываем тип ошибки, чтобы правильно среагировать
 
@@ -86,6 +103,7 @@ export class LoginComponent implements OnInit {
             break;
           }
 
+
           default: { // если любой другой тип ошибки - просто показать информацию
             this.error = `Ошибка (обратитесь к администратору)`; // будет показана ошибка на странице
             break;
@@ -93,9 +111,12 @@ export class LoginComponent implements OnInit {
 
         }
 
+
       }
     );
 
+
   }
+
 
 }
